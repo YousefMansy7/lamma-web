@@ -1,5 +1,6 @@
+/* Lamma v5 — rebuilt audio, Cairo-time admin code, offline PWA */
 const app = document.getElementById('app');
-const STORAGE_KEY = 'lamma-family-v1';
+const STORAGE_KEY = 'lamma-family-v5';
 
 const spyWords = {
   'أكلات': ['تفاحة','كشري','محشي','بيتزا','بطاطس','ملوخية','فراخ مشوية','رز بلبن','سمك','شاورما','كبدة','طعمية','فول','مكرونة','كفتة','بسبوسة','كنافة','مانجا','بطيخ','جبنة','حمام محشي','ممبار','فتة','رقاق','فطير مشلتت','بطاطا','حمص الشام','ترمس','لب','آيس كريم','كريب','برجر','سوشي','لازانيا','بانيه','حواوشي','مسقعة','طاجن عكاوي'],
@@ -17,7 +18,7 @@ const quizQuestions = [
 ];
 const avatars = ['😀','😎','🤠','🥳','🦁','🐼','🐸','🐵','🦊','🐯','🐰','🐨','🦄','🐧','🐥','🐙'];
 let state = load(), audioOn = state.settings.audioOn, musicOn = state.settings.musicOn;
-let audioCtx=null, musicTimer=null, musicStep=0, spyRound=null, addPersonReturn='family';
+let audioCtx=null, masterGain=null, musicTimer=null, musicStep=0, audioUnlocked=false, spyRound=null, addPersonReturn='family';
 let likelyRound=null, challengeRound=null, charadeRound=null, quizRound=null, countdownTimer=null;
 
 function defaultStats(){return{played:0,spyRounds:0,citizenRounds:0,spyWins:0,citizenWins:0,caughtAsSpy:0,correctVotes:0,wrongVotes:0,guessedWord:0,votesReceived:0,likelyWins:0,challengeWins:0,charadeWins:0,quizCorrect:0,points:0};}
@@ -32,20 +33,73 @@ function chip(p,x=''){return `<div class="person ${x}"><div class="avatar">${ava
 function screen(h){clearInterval(countdownTimer);app.innerHTML=`<main class="screen">${h}</main>`;bind();}
 function btn(t,a,c=''){return `<button class="btn ${c}" data-action="${a}">${t}</button>`;} function back(a='home'){return `<button class="btn small secondary" data-action="${a}">رجوع</button>`;}
 function bind(){document.querySelectorAll('[data-action]').forEach(e=>e.onclick=()=>{sound();actions[e.dataset.action]?.(e);});}
-function currentEgyptCode(){const n=new Date(),u=n.getTime()+n.getTimezoneOffset()*60000,e=new Date(u+2*3600000-12*60000);return String(e.getHours()).padStart(2,'0')+String(e.getMinutes()).padStart(2,'0');}
-function sound(kind='click'){if(!audioOn)return;audioCtx||=new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.value={click:560,success:820,sad:220}[kind]||560;g.gain.value=.045;o.connect(g);g.connect(audioCtx.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.1);o.stop(audioCtx.currentTime+.11);}
-const tracks={party:[262,330,392,523,392,330,294,349,440,587,440,349],bouncy:[330,392,494,392,330,262,294,370,440,370,294,247],chill:[262,294,330,392,330,294,247,294]};
-function startMusic(){if(!musicOn||musicTimer)return;audioCtx||=new(window.AudioContext||window.webkitAudioContext)();musicTimer=setInterval(()=>{if(!musicOn)return stopMusic();const notes=tracks[state.settings.musicTrack]||tracks.party,n=notes[musicStep++%notes.length],o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=state.settings.musicTrack==='chill'?'sine':'triangle';o.frequency.value=n;g.gain.value=.022;o.connect(g);g.connect(audioCtx.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.26);o.stop(audioCtx.currentTime+.28);},320);}
+function egyptTimeParts(date=new Date()){
+  const fmt=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Cairo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  const parts=Object.fromEntries(fmt.formatToParts(date).map(x=>[x.type,x.value]));
+  return {h:+parts.hour,m:+parts.minute};
+}
+function egyptCodeAt(offsetMinutes=0){
+  const shifted=new Date(Date.now()+(offsetMinutes-12)*60000);
+  const {h,m}=egyptTimeParts(shifted);
+  return String(h).padStart(2,'0')+String(m).padStart(2,'0');
+}
+function normalizeDigits(v=''){return String(v).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\D/g,'');}
+function isValidAdminCode(v){const code=normalizeDigits(v);return [0,-1,1].some(delta=>code===egyptCodeAt(delta));}
+async function ensureAudio(){
+  if(!audioCtx){
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    masterGain=audioCtx.createGain();
+    masterGain.gain.value=.65;
+    masterGain.connect(audioCtx.destination);
+  }
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  audioUnlocked=audioCtx.state==='running';
+  return audioUnlocked;
+}
+async function sound(kind='click'){
+  if(!audioOn)return;
+  if(!await ensureAudio())return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type='triangle';o.frequency.value={click:620,success:880,sad:230}[kind]||620;
+  g.gain.setValueAtTime(.06,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.13);
+  o.connect(g);g.connect(masterGain);o.start();o.stop(audioCtx.currentTime+.14);
+}
+const tracks={
+  party:{tempo:230,wave:'triangle',notes:[523,659,784,1047,784,659,587,698,880,1175,880,698]},
+  bouncy:{tempo:270,wave:'square',notes:[659,784,988,784,659,523,587,740,880,740,587,494]},
+  chill:{tempo:420,wave:'sine',notes:[262,294,330,392,330,294,247,294]}
+};
+function playMusicNote(){
+  if(!musicOn||!audioUnlocked)return;
+  const tr=tracks[state.settings.musicTrack]||tracks.party;
+  const n=tr.notes[musicStep++%tr.notes.length];
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=tr.wave;o.frequency.value=n;
+  g.gain.setValueAtTime(state.settings.musicTrack==='chill'?.035:.045,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+Math.min(.34,tr.tempo/1000*.9));
+  o.connect(g);g.connect(masterGain);o.start();o.stop(audioCtx.currentTime+.38);
+}
+async function startMusic(){
+  if(!musicOn||musicTimer)return false;
+  if(!await ensureAudio())return false;
+  const tr=tracks[state.settings.musicTrack]||tracks.party;
+  playMusicNote();
+  musicTimer=setInterval(playMusicNote,tr.tempo);
+  return true;
+}
 function stopMusic(){clearInterval(musicTimer);musicTimer=null;}
+async function unlockAndPlay(){audioUnlocked=await ensureAudio();if(musicOn)await startMusic();renderHome();}
+async function testMusic(){await ensureAudio();const old=musicOn;musicOn=true;stopMusic();await startMusic();setTimeout(()=>{stopMusic();musicOn=old;if(old)startMusic();},2400);}
 
-const actions={home:renderHome,games:renderGames,family:renderFamily,leaderboard:renderLeaderboard,settings:renderSettings,memories:renderMemories,spySetup:renderSpySetup,likelySetup:renderLikelySetup,challengeSetup:renderChallengeSetup,charadeSetup:renderCharadeSetup,quizSetup:renderQuizSetup,addPerson:()=>renderPersonForm('family'),addPersonFromSpy:()=>renderPersonForm('spySetup'),savePerson,deletePerson:e=>deletePerson(e.dataset.id),toggleAudio:()=>{audioOn=!audioOn;state.settings.audioOn=audioOn;save();renderSettings();},toggleMusic:()=>{musicOn=!musicOn;state.settings.musicOn=musicOn;save();musicOn?startMusic():stopMusic();renderSettings();},setTrack:e=>{state.settings.musicTrack=e.dataset.track;save();stopMusic();if(musicOn)startMusic();renderSettings();},addMemory:addMemory,
+const actions={home:renderHome,unlockAudio:unlockAndPlay,testMusic,games:renderGames,family:renderFamily,leaderboard:renderLeaderboard,settings:renderSettings,memories:renderMemories,spySetup:renderSpySetup,likelySetup:renderLikelySetup,challengeSetup:renderChallengeSetup,charadeSetup:renderCharadeSetup,quizSetup:renderQuizSetup,addPerson:()=>renderPersonForm('family'),addPersonFromSpy:()=>renderPersonForm('spySetup'),savePerson,deletePerson:e=>deletePerson(e.dataset.id),toggleAudio:()=>{audioOn=!audioOn;state.settings.audioOn=audioOn;save();renderSettings();},toggleMusic:async()=>{musicOn=!musicOn;state.settings.musicOn=musicOn;save();if(musicOn){await startMusic();}else stopMusic();renderSettings();},setTrack:e=>{state.settings.musicTrack=e.dataset.track;save();stopMusic();if(musicOn)startMusic();renderSettings();},addMemory:addMemory,
 startSpy,spyRevealNow:renderSpySecret,spyNextPlayer:()=>{spyRound.revealIndex++;renderSpyHandover();},spyMoreQuestions:renderQuestionPrompt,spyStartVoting:startVoting,spySubmitVote:submitVote,spySubmitGuess:submitSpyGuess,
 startLikely,startLikelyVote,submitLikelyVote,likelyNext:renderLikelyPrompt,
 startChallenge,challengeDone:()=>finishChallenge(true),challengeSkip:()=>finishChallenge(false),challengeNext:renderChallenge,
 startCharade,charadeReveal:renderCharadeWord,charadeGuessed:()=>finishCharade(true),charadeMissed:()=>finishCharade(false),charadeNext:renderCharadeHandover,
 startQuiz,quizTrue:()=>answerQuiz(true),quizFalse:()=>answerQuiz(false),quizNext:renderQuizQuestion};
 
-function renderHome(){if(musicOn)startMusic();screen(`<section class="hero card"><div class="sparkles">✨ 🎈 ✨</div><h1>لَمّة</h1><p>كل لَمّة فيها ضحكة جديدة</p><div class="floating">🎲</div></section><section class="card menu">${btn('🎮 يلا نلعب','games')}${btn('👨‍👩‍👧 أفراد العيلة','family','green')}${btn('🏆 لوحة الصدارة','leaderboard','pink')}${btn('📸 الذكريات','memories','secondary')}${btn('⚙️ الإعدادات','settings','secondary')}</section>`);}
+function renderHome(){if(musicOn&&audioUnlocked)startMusic();const audioGate=musicOn&&!audioUnlocked?`<section class="audio-gate">🎵 الموسيقى جاهزة — لازم ضغطة واحدة بسبب حماية المتصفح ${btn('فعّل الصوت','unlockAudio','green small')}</section>`:'';screen(`${audioGate}<section class="hero card"><div class="sparkles">✨ 🎈 ✨</div><h1>لَمّة</h1><p>كل لَمّة فيها ضحكة جديدة</p><div class="floating">🎲</div></section><section class="card menu">${btn('🎮 يلا نلعب','games')}${btn('👨‍👩‍👧 أفراد العيلة','family','green')}${btn('🏆 لوحة الصدارة','leaderboard','pink')}${btn('📸 الذكريات','memories','secondary')}${btn('⚙️ الإعدادات','settings','secondary')}</section>`);}
 function renderGames(){screen(`<section class="card"><div class="topbar"><h2 class="title">اختار اللعبة</h2>${back()}</div><div class="grid games-grid">
 ${gameCard('🕵️','لعبة الجاسوس','كلمات سرية وتصويت وذكاء','spySetup','yellow')}
 ${gameCard('😂','مين فينا؟','صوّتوا وشوفوا مين كسب اللقب','likelySetup','pinkish')}
@@ -57,8 +111,8 @@ function gameCard(i,t,p,a,c){return `<div class="game-card ${c}" data-action="${
 function renderFamily(){const h=state.people.length?state.people.map(p=>{const s=stats(p.id);return `<div class="person"><div class="avatar">${avatar(p)}</div><strong>${esc(p.name)}</strong><small class="hint">نقاط: ${s.points} · لعب: ${s.played}</small><button class="btn small pink" data-action="deletePerson" data-id="${p.id}">حذف</button></div>`}).join(''):'<p class="notice">لسه مفيش أفراد. ضيف أول واحد 🎉</p>';screen(`<section class="card"><div class="topbar"><h2 class="title">أفراد العيلة</h2>${back()}</div>${btn('➕ إضافة شخص','addPerson','green')}<div class="people">${h}</div></section>`);}
 function renderPersonForm(ret='family'){addPersonReturn=ret;screen(`<section class="card"><div class="topbar"><h2 class="title">إضافة شخص</h2>${back(ret)}</div><div class="field"><label>الاسم</label><input class="input" id="personName" placeholder="مثلاً: يوسف"></div><div class="field"><label>الصورة اختياري</label><input class="input" id="personPhoto" type="file" accept="image/*"></div><p class="hint">من غير صورة؟ هنختار أفاتار كرتوني تلقائي.</p>${btn('حفظ الشخصية','savePerson','green')}</section>`);}
 async function savePerson(){const n=document.getElementById('personName').value.trim(),f=document.getElementById('personPhoto').files[0];if(!n)return alert('اكتب الاسم الأول');let photo='';if(f)photo=await fileData(f);const p={id:uid(),name:n,photo,avatar:sample(avatars)};state.people.push(p);state.stats[p.id]=defaultStats();save();actions[addPersonReturn]?.()||renderFamily();}
-function deletePerson(id){if(prompt('اكتب رمز التعديل الحالي.')!==currentEgyptCode())return alert('الرمز مش صح 😄');state.people=state.people.filter(p=>p.id!==id);delete state.stats[id];save();renderFamily();}
-function renderSettings(){screen(`<section class="card"><div class="topbar"><h2 class="title">الإعدادات</h2>${back()}</div>${btn(audioOn?'🔊 المؤثرات شغالة':'🔇 المؤثرات مقفولة','toggleAudio')}<br><br>${btn(musicOn?'🎵 الموسيقى شغالة':'🎵 الموسيقى مقفولة','toggleMusic','secondary')}<h3>اختار لحن الخلفية</h3><div class="track-grid"><button class="track ${state.settings.musicTrack==='party'?'active':''}" data-action="setTrack" data-track="party">🎉 حفلة</button><button class="track ${state.settings.musicTrack==='bouncy'?'active':''}" data-action="setTrack" data-track="bouncy">🪇 نطّاط</button><button class="track ${state.settings.musicTrack==='chill'?'active':''}" data-action="setTrack" data-track="chill">🌙 هادي</button></div><p class="notice">الموسيقى مولّدة جوه اللعبة، من غير تحميل ملفات أو إنترنت.</p></section>`);}
+function deletePerson(id){if(!isValidAdminCode(prompt('اكتب رمز التعديل الحالي.')))return alert('الرمز مش صح 😄');state.people=state.people.filter(p=>p.id!==id);delete state.stats[id];save();renderFamily();}
+function renderSettings(){screen(`<section class="card"><div class="topbar"><h2 class="title">الإعدادات</h2>${back()}</div>${btn(audioOn?'🔊 المؤثرات شغالة':'🔇 المؤثرات مقفولة','toggleAudio')}<br><br>${btn(musicOn?'🎵 الموسيقى شغالة':'🎵 الموسيقى مقفولة','toggleMusic','secondary')}<h3>اختار لحن الخلفية</h3><div class="track-grid"><button class="track ${state.settings.musicTrack==='party'?'active':''}" data-action="setTrack" data-track="party">🎉 حفلة</button><button class="track ${state.settings.musicTrack==='bouncy'?'active':''}" data-action="setTrack" data-track="bouncy">🪇 نطّاط</button><button class="track ${state.settings.musicTrack==='chill'?'active':''}" data-action="setTrack" data-track="chill">🌙 هادي</button></div>${btn('▶️ جرّب الموسيقى دلوقتي','testMusic','green')}<p class="notice">الموسيقى مولّدة داخل اللعبة. المتصفح بيطلب ضغطة من المستخدم قبل تشغيل أي صوت؛ فعّلها مرة واحدة وهتشتغل أثناء اللعب.</p></section>`);}
 function renderMemories(){const cards=state.memories.slice().reverse().map(m=>`<div class="memory-card">📸 <strong>${esc(m.text)}</strong><small>${new Date(m.at).toLocaleDateString('ar-EG')}</small></div>`).join('')||'<p class="notice">لسه مفيش ذكريات محفوظة.</p>';screen(`<section class="card"><div class="topbar"><h2 class="title">الذكريات</h2>${back()}</div><div class="field"><input class="input" id="memoryText" placeholder="اكتب موقف مضحك حصل..."></div>${btn('✨ احفظ اللحظة','addMemory','pink')}<div class="memory-list">${cards}</div></section>`);}
 function addMemory(){const x=document.getElementById('memoryText').value.trim();if(!x)return alert('اكتب الذكرى الأول');state.memories.push({text:x,at:Date.now()});save();sound('success');renderMemories();}
 function renderLeaderboard(){const rows=state.people.map(p=>({p,s:stats(p.id)})).sort((a,b)=>b.s.points-a.s.points);screen(`<section class="card"><div class="topbar"><h2 class="title">لوحة الصدارة</h2>${back()}</div>${rows.length?rows.map((r,i)=>`<div class="leader-row"><div class="rank">${i<3?['🥇','🥈','🥉'][i]:i+1}</div><div class="avatar mini">${avatar(r.p)}</div><div><strong>${esc(r.p.name)}</strong><small class="hint">${r.s.points} نقطة · جاسوس ${r.s.spyWins} · تمثيل ${r.s.charadeWins} · تحديات ${r.s.challengeWins}</small></div></div>`).join(''):'<p class="notice">العبوا أول جولة علشان تبدأ المنافسة.</p>'}</section>`);}
