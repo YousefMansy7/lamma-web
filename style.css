@@ -80,3 +80,19 @@ hr { border: 0; border-top: 2px dashed #ead7ad; margin: 18px 0; }
 .rank { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #ffe193; font-weight: 1000; }
 .center-input { text-align: center; font-size: 22px; font-weight: 900; margin: 10px 0; }
 @media (max-width: 430px) { .versus { grid-template-columns: 1fr; } .arrow { justify-self: center; } }
+
+
+/* v4 delight */
+.hero { text-align:center; margin-bottom:18px; position:relative; overflow:hidden; background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(255,245,207,.92)); }
+.hero h1 { margin:0; font-size:clamp(56px,15vw,88px); text-shadow:0 5px 0 #ffd36b; }
+.hero p { font-weight:900; color:var(--muted); }
+.sparkles { font-size:25px; animation:floaty 2.4s ease-in-out infinite; }
+.floating { position:absolute; left:22px; bottom:14px; font-size:42px; animation:spinBob 3s ease-in-out infinite; }
+@keyframes floaty{50%{transform:translateY(-7px) rotate(2deg)}} @keyframes spinBob{50%{transform:translateY(-9px) rotate(14deg)}}
+.games-grid{gap:14px}.game-card{position:relative;transition:.18s transform}.game-card:active{transform:scale(.98)}.game-card h3{margin:0 0 4px}.go{margin-inline-start:auto;font-size:34px;font-weight:1000;color:#9a7e51}.pinkish{background:linear-gradient(135deg,#fff,#ffe2ea)}.greenish{background:linear-gradient(135deg,#fff,#dcffed)}.blueish{background:linear-gradient(135deg,#fff,#dff4ff)}.purpleish{background:linear-gradient(135deg,#fff,#eee5ff)}.yellow{background:linear-gradient(135deg,#fff,#fff0bd)}
+.track-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.track{border:2px solid #ead7ad;border-radius:18px;background:#fff;padding:14px 8px;font-weight:900;cursor:pointer}.track.active{border-color:#ffbe3d;background:#fff4c9;box-shadow:0 6px 0 #e3aa30}
+.memory-list{display:grid;gap:10px;margin-top:16px}.memory-card{background:#fff;border-radius:20px;padding:14px;box-shadow:0 8px 20px rgba(0,0,0,.06);display:grid;gap:4px}.memory-card small{color:var(--muted)}
+.challenge-box,.quiz-box{font-size:clamp(25px,7vw,40px);font-weight:1000;line-height:1.5;background:linear-gradient(135deg,#fff5cb,#ffe2e8);padding:24px;border-radius:25px;margin:16px 0;border:3px dashed #ffbd4a}.quiz-box{background:linear-gradient(135deg,#e9fff4,#e7efff)}
+.result-burst{font-size:76px;animation:burst .55s ease-out}@keyframes burst{from{transform:scale(.2) rotate(-30deg);opacity:0}70%{transform:scale(1.2) rotate(6deg)}to{transform:scale(1)}}
+.winners{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}.timer{font-size:68px;font-weight:1000;color:#ff657e;background:#fff;border-radius:50%;width:120px;height:120px;display:grid;place-items:center;box-shadow:0 10px 25px rgba(255,101,126,.2);margin:12px auto}.two-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%}
+@media(max-width:430px){.two-cols,.track-grid{grid-template-columns:1fr}.hero h1{font-size:62px}}
